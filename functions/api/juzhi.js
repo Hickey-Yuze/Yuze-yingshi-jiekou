@@ -230,6 +230,24 @@ async function handleDetail(env, ids, lineNum) {
 
 async function handler(req, env) {
   const u = new URL(req.url);
+  if (u.searchParams.get("debug") === "1") {
+    let meta = null, keyCount = 0, putTest = null, listRaw = null;
+    try {
+      meta = env?.JUZHI_CACHE ? await env.JUZHI_CACHE.get("idx:meta") : null;
+      if (env?.JUZHI_CACHE) {
+        const list = await env.JUZHI_CACHE.list({ limit: 1 });
+        keyCount = list.keys.length;
+        listRaw = JSON.stringify(list);
+        await env.JUZHI_CACHE.put("debug:test", "1");
+        putTest = await env.JUZHI_CACHE.get("debug:test");
+      }
+    } catch (e) { meta = "ERR:" + e.message; }
+    return new Response(JSON.stringify({
+      envKeys: Object.keys(env || {}),
+      hasKV: !!env?.JUZHI_CACHE,
+      meta, keyCount, listRaw, putTest,
+    }), { headers: { "Content-Type": "application/json" } });
+  }
   const ac = u.searchParams.get("ac");
   const wd = u.searchParams.get("wd");
   const ids = u.searchParams.get("ids");
