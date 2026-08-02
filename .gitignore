@@ -1,0 +1,4 @@
+node_modules/
+index/
+.wrangler/
+.DS_Store

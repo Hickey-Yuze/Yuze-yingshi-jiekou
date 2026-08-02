@@ -1,0 +1,16 @@
+{
+  "name": "juzhi-adapter",
+  "pages_build_output_dir": "dist",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [
+    {
+      "binding": "JUZHI_CACHE",
+      "id": "2f0b75ed2eb647fda3f0bc5e36b40dd3",
+      "preview_id": "2f0b75ed2eb647fda3f0bc5e36b40dd3"
+    }
+  ],
+  "functions": {
+    "nodejs_compat": true
+  }
+}

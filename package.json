@@ -1,0 +1,14 @@
+{
+  "name": "juzhi-adapter-cloudflare",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "磁力猫(橘汁) -> 苹果CMS 兼容 API 适配器 (Cloudflare Pages Functions 版)",
+  "scripts": {
+    "test": "node test.mjs",
+    "dev": "wrangler pages dev --kv JUZHI_CACHE"
+  },
+  "dependencies": {
+    "wrangler": "^4"
+  }
+}
