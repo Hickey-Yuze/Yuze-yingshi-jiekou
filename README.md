@@ -9,13 +9,13 @@
 |---|---|
 | `spawn` Python 解析 protobuf | `lib/proto.js` 纯 JS wire-format 解析器（三个 schema 按字段号提取） |
 | `fs.readFileSync` 29MB 索引 | `build_index.py` 拆分 10 块 × ~3MB 静态文件 → `dist/index/`，**Functions 经 `env.ASSETS` 读取**（无需 KV 绑定） |
-| `http.createServer()` | `functions/api/juzhi.js` 标准 Pages Functions handler（GET/POST/OPTIONS） |
+| `http.createServer()` | `functions/api/yuze.js` 标准 Pages Functions handler（GET/POST/OPTIONS） |
 | 内存缓存 + 落盘 json | 模块级内存缓存（搜索/列表/zone 公钥）；直链缓存可选 KV `JUZHI_CACHE`（不配也能跑） |
 
 ## 目录结构
 
 ```
-functions/api/juzhi.js   # 苹果CMS 接口(路由 + 处理器, 复刻原版全部分支)
+functions/api/yuze.js   # 苹果CMS 接口(路由 + 处理器, 复刻原版全部分支)
 lib/proto.js             # 纯 JS protobuf: 编码(varint/lenField) + 解码 + 三 schema 提取
 lib/crypto.js            # 加密常量 + MD5/SHA1/AES-256-ECB/RSA-PKCS1v1.5 + 参数构造
 lib/mirror.js            # 磁力猫客户端: zone 握手 / 业务请求 / 直链解析
@@ -35,7 +35,7 @@ python3 build_index.py
 npx wrangler pages deploy dist --project-name <项目名> --branch main
 
 # 3. 验证
-curl "https://<项目名>.pages.dev/api/juzhi?ac=detail&wd=流浪地球"
+curl "https://<项目名>.pages.dev/api/yuze?ac=detail&wd=流浪地球"
 ```
 
 > 注意：部署**必须用 `--branch main`**（main 是生产分支）；`--branch production` 会被当成 Preview。

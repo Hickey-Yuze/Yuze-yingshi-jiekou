@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { onRequestGet } from "./functions/api/juzhi.js";
+import { onRequestGet } from "./functions/api/yuze.js";
 
 class Assets {
   async fetch(url) {
@@ -16,7 +16,7 @@ class Assets {
 const env = { ASSETS: new Assets() };
 
 async function call(query) {
-  const req = new Request("http://localhost/api/juzhi?" + query);
+  const req = new Request("http://localhost/api/yuze?" + query);
   const res = await onRequestGet({ request: req, env, waitUntil() {} });
   return JSON.parse(await res.text());
 }
