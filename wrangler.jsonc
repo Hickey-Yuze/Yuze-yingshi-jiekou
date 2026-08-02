@@ -9,8 +9,5 @@
       "id": "2f0b75ed2eb647fda3f0bc5e36b40dd3",
       "preview_id": "2f0b75ed2eb647fda3f0bc5e36b40dd3"
     }
-  ],
-  "functions": {
-    "nodejs_compat": true
-  }
+  ]
 }
