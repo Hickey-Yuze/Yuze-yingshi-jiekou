@@ -7,10 +7,10 @@
 
 | 原版障碍 | 解决 |
 |---|---|
-| `spawn` Python 解析 protobuf | `lib/proto.js` 纯 JS wire-format 解析器（三个 schema 按字段号提取，已验证与 protoc 输出字段一致） |
-| `fs.readFileSync` 29MB 索引 | `build_index.py` 拆分 10 块 × ~3MB（均 <25MB 限制），存 **KV**，搜索/浏览按块加载 |
+| `spawn` Python 解析 protobuf | `lib/proto.js` 纯 JS wire-format 解析器（三个 schema 按字段号提取） |
+| `fs.readFileSync` 29MB 索引 | `build_index.py` 拆分 10 块 × ~3MB 静态文件 → `dist/index/`，**Functions 经 `env.ASSETS` 读取**（无需 KV 绑定） |
 | `http.createServer()` | `functions/api/juzhi.js` 标准 Pages Functions handler（GET/POST/OPTIONS） |
-| 内存缓存 + 落盘 json | **KV `JUZHI_CACHE`**：直链(365d) / zone 公钥(30min) / 搜索结果(1h) |
+| 内存缓存 + 落盘 json | 模块级内存缓存（搜索/列表/zone 公钥）；直链缓存可选 KV `JUZHI_CACHE`（不配也能跑） |
 
 ## 目录结构
 
@@ -18,35 +18,29 @@
 functions/api/juzhi.js   # 苹果CMS 接口(路由 + 处理器, 复刻原版全部分支)
 lib/proto.js             # 纯 JS protobuf: 编码(varint/lenField) + 解码 + 三 schema 提取
 lib/crypto.js            # 加密常量 + MD5/SHA1/AES-256-ECB/RSA-PKCS1v1.5 + 参数构造
-lib/mirror.js            # 磁力猫客户端: zone 握手 / 业务请求 / 直链解析(带 KV 缓存)
-build_index.py           # 索引构建: 生成 index/chunk_N.json + index/cat_*.json + index/meta.json + upload_kv.sh
-test.mjs                 # 本地回归测试(模拟 KV, 直调 handler, 覆盖全部接口)
-wrangler.jsonc           # Pages 项目配置(KV binding)
-upload_kv.sh             # 一键上传索引到 KV (由 build_index.py 生成)
+lib/mirror.js            # 磁力猫客户端: zone 握手 / 业务请求 / 直链解析
+build_index.py           # 索引构建: 生成 dist/index/ 静态块 (chunk_N.txt / cat_N.txt / meta.json)
+test.mjs                 # 本地回归测试(模拟 ASSETS, 直调 handler, 覆盖全部接口)
+wrangler.jsonc           # Pages 项目配置(compatibility_flags 等)
+dist/index/              # 静态索引块(构建产物, 已提交可选)
 ```
 
 ## 部署步骤
 
 ```bash
-# 1. 构建索引(可选, 已提交产物也行)
-python3 build_index.py          # 生成 index/ 目录 + upload_kv.sh
+# 1. 构建索引 -> dist/index/ (chunk_0~9.txt, cat_20~24.txt, meta.json)
+python3 build_index.py
 
-# 2. 创建 KV 并绑定
-wrangler kv namespace create JUZHI_CACHE   # 得到的 id 填入 wrangler.jsonc
+# 2. 部署 (wrangler 4, 需已 wrangler login)
+npx wrangler pages deploy dist --project-name <项目名> --branch main
 
-# 3. 上传索引
-./upload_kv.sh                  # 10 块全量 + 5 块分类 + 无 meta(meta.json 需单独 put)
-#   注: meta.json 需手动: wrangler kv key put --binding JUZHI_CACHE "idx:meta" "$(cat index/meta.json)"
-
-# 4. 本地开发
-npm i
-wrangler pages dev --kv JUZHI_CACHE   # 访问 http://localhost:8788/api/juzhi?ac=detail
-
-# 5. 部署 (GitHub 连接 Pages 项目, 构建命令留空, 输出目录 dist)
-wrangler pages deploy .            # 或 git push 自动部署
+# 3. 验证
+curl "https://<项目名>.pages.dev/api/juzhi?ac=detail&wd=流浪地球"
 ```
 
-部署后视频源 url 填: `https://<project>.pages.dev/api/juzhi`
+> 注意：部署**必须用 `--branch main`**（main 是生产分支）；`--branch production` 会被当成 Preview。
+> 本项目已实测：Direct Upload 部署下 KV binding 不可靠（dashboard 绑定不注入、jsonc 绑定指向错误命名空间），
+> 故索引全部走 **ASSETS 静态资源**（`env.ASSETS.fetch()`），彻底绕开绑定问题。
 
 ## 本地回归
 
@@ -58,16 +52,10 @@ node test.mjs
 分类浏览(首末页) / 空参数回退。注意: **详情/直链用例依赖磁力猫服务端**，
 服务端故障时(zone 400 / code 1010)该用例会失败, 其余用例仍应全绿。
 
-## KV Key 一览
+## 可选: KV 缓存 (JUZHI_CACHE)
 
-| Key | 内容 | TTL |
-|---|---|---|
-| `idx:0..9` | 全量索引行块(id\|name\|year\|area\|remark\|cover\|cat) | 永久 |
-| `idx:meta` | `{"chunks":[行数...],"total":N}` | 永久 |
-| `cat:20..24` | 各分类行块 | 永久 |
-| `playurl:<src>:<path>` | 视频直链 | 365d |
-| `meta:zone` | zone 公钥 | 30min |
-| `s:<kw>` | 搜索结果 JSON | 1h |
+非必需。若配置：dashboard 绑定 `JUZHI_CACHE` 后**用 GitHub 集成部署**（Direct Upload 不注入绑定）。
+KV 用途: 直链缓存(365d) / zone 公钥(30min)。索引不使用 KV。
 
 ## 对接文档
 

@@ -1,26 +1,19 @@
 import { readFileSync } from "node:fs";
 import { onRequestGet } from "./functions/api/juzhi.js";
 
-class MemoryKV {
-  constructor() { this.m = new Map(); }
-  async get(k) { return this.m.has(k) ? this.m.get(k) : null; }
-  async put(k, v, opts) { this.m.set(k, v); return undefined; }
+class Assets {
+  async fetch(url) {
+    const p = new URL(url).pathname;
+    try {
+      const body = readFileSync("./dist" + p, "utf8");
+      return { ok: true, text: async () => body };
+    } catch {
+      return { ok: false, text: async () => "" };
+    }
+  }
 }
 
-const kv = new MemoryKV();
-for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
-  kv.m.set("idx:" + i, readFileSync(`./index/chunk_${i}.json`, "utf8").length
-    ? JSON.parse(readFileSync(`./index/chunk_${i}.json`, "utf8"))[0].value : "");
-}
-const meta = JSON.parse(readFileSync("./index/meta.json", "utf8"));
-kv.m.set("idx:meta", JSON.stringify(meta));
-for (const cat of ["20", "21", "22", "23", "24"]) {
-  try {
-    kv.m.set("cat:" + cat, JSON.parse(readFileSync(`./index/cat_${cat}.json`, "utf8"))[0].value);
-  } catch { kv.m.set("cat:" + cat, ""); }
-}
-
-const env = { JUZHI_CACHE: kv };
+const env = { ASSETS: new Assets() };
 
 async function call(query) {
   const req = new Request("http://localhost/api/juzhi?" + query);

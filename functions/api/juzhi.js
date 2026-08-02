@@ -22,21 +22,27 @@ function cmsItem(it, typeName) {
   };
 }
 
-/* ============ KV 索引加载 (lazy + 模块级缓存) ============ */
+/* ============ 静态索引加载 (env.ASSETS, 无需 KV 绑定) ============ */
 let idxChunks = null;   // 全量块数组(按序)
 let idxMeta = null;     // { chunks: [每块行数], total }
 let catCache = {};      // { [cat]: 行数组 }
 
+async function assetsText(env, path) {
+  const res = await env?.ASSETS?.fetch(new URL(path, "https://assets.local"));
+  if (!res || !res.ok) return null;
+  return res.text();
+}
+
 async function loadAllChunks(env) {
   if (idxChunks && idxMeta) return { idxChunks, idxMeta };
-  if (!env?.JUZHI_CACHE) return { idxChunks: [], idxMeta: null };
+  if (!env?.ASSETS) return { idxChunks: [], idxMeta: null };
   let meta = null;
-  try { meta = JSON.parse(await env.JUZHI_CACHE.get("idx:meta")); } catch {}
+  try { meta = JSON.parse(await assetsText(env, "/index/meta.json")); } catch {}
   if (!meta?.chunks?.length) return { idxChunks: [], idxMeta: null };
   const chunks = [];
   for (let i = 0; i < meta.chunks.length; i++) {
     try {
-      const raw = await env.JUZHI_CACHE.get("idx:" + i);
+      const raw = await assetsText(env, "/index/chunk_" + i + ".txt");
       if (raw) chunks.push(raw.split("\n").filter(Boolean));
     } catch {}
   }
@@ -47,9 +53,9 @@ async function loadAllChunks(env) {
 
 async function loadCat(env, cat) {
   if (catCache[cat]) return catCache[cat];
-  if (!env?.JUZHI_CACHE) return [];
+  if (!env?.ASSETS) return [];
   try {
-    const raw = await env.JUZHI_CACHE.get("cat:" + cat);
+    const raw = await assetsText(env, "/index/cat_" + cat + ".txt");
     catCache[cat] = raw ? raw.split("\n").filter(Boolean) : [];
   } catch { catCache[cat] = []; }
   return catCache[cat];
@@ -65,23 +71,7 @@ function parseLine(line) {
 async function handleSearch(env, wd, pg) {
   try {
     const { idxChunks, idxMeta } = await loadAllChunks(env);
-    const cacheKey = "s:" + wd.toLowerCase();
     if (idxChunks.length === 0) return { code: 0, msg: "索引未加载", list: [] };
-    if (env?.JUZHI_CACHE) {
-      try {
-        const hit = await env.JUZHI_CACHE.get(cacheKey);
-        if (hit) {
-          const saved = JSON.parse(hit);
-          const start = (pg - 1) * SEARCH_PS;
-          return {
-            code: 1, msg: "数据列表", page: pg,
-            pagecount: Math.ceil(saved.total / SEARCH_PS) || 1,
-            limit: SEARCH_PS, total: saved.total,
-            list: saved.list.slice(start, start + SEARCH_PS),
-          };
-        }
-      } catch {}
-    }
     const kw = (wd || "").toLowerCase();
     const hits = [];
     for (const chunk of idxChunks) {
@@ -96,11 +86,6 @@ async function handleSearch(env, wd, pg) {
       if (!kw && hits.length >= SEARCH_PS * 5) break;
     }
     const start = (pg - 1) * SEARCH_PS;
-    if (env?.JUZHI_CACHE) {
-      try {
-        await env.JUZHI_CACHE.put(cacheKey, JSON.stringify({ total: hits.length, list: hits }), { expirationTtl: 3600 });
-      } catch {}
-    }
     return {
       code: 1, msg: "数据列表", page: pg,
       pagecount: Math.ceil(hits.length / SEARCH_PS) || 1,
@@ -230,24 +215,6 @@ async function handleDetail(env, ids, lineNum) {
 
 async function handler(req, env) {
   const u = new URL(req.url);
-  if (u.searchParams.get("debug") === "1") {
-    let meta = null, keyCount = 0, putTest = null, listRaw = null;
-    try {
-      meta = env?.JUZHI_CACHE ? await env.JUZHI_CACHE.get("idx:meta") : null;
-      if (env?.JUZHI_CACHE) {
-        const list = await env.JUZHI_CACHE.list({ limit: 1 });
-        keyCount = list.keys.length;
-        listRaw = JSON.stringify(list);
-        await env.JUZHI_CACHE.put("debug:test", "1");
-        putTest = await env.JUZHI_CACHE.get("debug:test");
-      }
-    } catch (e) { meta = "ERR:" + e.message; }
-    return new Response(JSON.stringify({
-      envKeys: Object.keys(env || {}),
-      hasKV: !!env?.JUZHI_CACHE,
-      meta, keyCount, listRaw, putTest,
-    }), { headers: { "Content-Type": "application/json" } });
-  }
   const ac = u.searchParams.get("ac");
   const wd = u.searchParams.get("wd");
   const ids = u.searchParams.get("ids");
